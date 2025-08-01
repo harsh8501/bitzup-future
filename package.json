@@ -1,0 +1,26 @@
+{
+  "name": "bybit-future",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "bybit-api": "^4.1.17",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.1",
+    "helmet": "^8.1.0",
+    "joi": "^17.13.3",
+    "mysql": "^2.18.1",
+    "node-cron": "^4.2.1",
+    "uuid": "^11.1.0"
+  }
+}
