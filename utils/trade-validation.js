@@ -2,11 +2,11 @@ import Joi from "joi";
 
 export const validateSetLeverage = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string()
@@ -19,7 +19,7 @@ export const validateSetLeverage = (req, res, next) => {
         leverage: Joi.string()
             .required()
             .messages({
-                'string.base': 'leverage must be a number.',
+                'string.base': 'leverage must be a string.',
                 'string.empty': 'leverage cannot be empty.',
                 'any.required': 'leverage is required.',
             }),
@@ -32,7 +32,7 @@ export const validateSetLeverage = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -43,14 +43,13 @@ export const validateSetLeverage = (req, res, next) => {
 
 export const validateGetPosition = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
-
         quote_coin: Joi.string()
             .required()
             .messages({
@@ -66,7 +65,7 @@ export const validateGetPosition = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -77,14 +76,13 @@ export const validateGetPosition = (req, res, next) => {
 
 export const validateGetLeverage = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
-
         symbol: Joi.string()
             .required()
             .messages({
@@ -100,7 +98,7 @@ export const validateGetLeverage = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -111,11 +109,11 @@ export const validateGetLeverage = (req, res, next) => {
 
 export const validateSwitchMarginMode = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         margin_mode: Joi.string()
@@ -134,7 +132,7 @@ export const validateSwitchMarginMode = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -145,11 +143,13 @@ export const validateSwitchMarginMode = (req, res, next) => {
 
 export const validatePlaceOrder = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number().required().messages({
-            'number.base': 'user_id must be a number.',
-            'number.empty': 'user_id cannot be empty.',
-            'any.required': 'user_id is required.',
-        }),
+        user_id: Joi.string()
+            .required()
+            .messages({
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
+            }),
         symbol: Joi.string().required().messages({
             'string.base': 'symbol must be a string.',
             'string.empty': 'symbol cannot be empty.',
@@ -200,7 +200,7 @@ export const validatePlaceOrder = (req, res, next) => {
         }),
         time_in_force: Joi.when('type', {
             is: 'Limit',
-            then: Joi.string().valid("GTC", "IOC", "FOK").optional(),
+            then: Joi.string().valid("GTC", "IOC", "FOK", "PostOnly").optional(),
             otherwise: Joi.optional()
         })
     });
@@ -222,7 +222,7 @@ export const validatePlaceOrder = (req, res, next) => {
     );
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -233,11 +233,13 @@ export const validatePlaceOrder = (req, res, next) => {
 
 export const validateCancelOrder = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number().required().messages({
-            'number.base': 'user_id must be a number.',
-            'number.empty': 'user_id cannot be empty.',
-            'any.required': 'user_id is required.',
-        }),
+        user_id: Joi.string()
+            .required()
+            .messages({
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
+            }),
         symbol: Joi.string().required().messages({
             'string.base': 'symbol must be a string.',
             'string.empty': 'symbol cannot be empty.',
@@ -259,7 +261,7 @@ export const validateCancelOrder = (req, res, next) => {
     );
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -270,14 +272,13 @@ export const validateCancelOrder = (req, res, next) => {
 
 export const validateCancelAllOrders = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
-
         quote_coin: Joi.string()
             .required()
             .messages({
@@ -287,7 +288,7 @@ export const validateCancelAllOrders = (req, res, next) => {
             }),
         order_type: Joi.string()
             .required()
-            .valid("Order", "StopOrder")
+            .valid("limit", "tpslOrder", "trailingStop")
             .messages({
                 'string.base': 'order type must be a string.',
                 'string.empty': 'order type cannot be empty.',
@@ -302,7 +303,7 @@ export const validateCancelAllOrders = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -313,11 +314,13 @@ export const validateCancelAllOrders = (req, res, next) => {
 
 export const validateModifyOrder = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number().required().messages({
-            'number.base': 'user_id must be a number.',
-            'number.empty': 'user_id cannot be empty.',
-            'any.required': 'user_id is required.',
-        }),
+        user_id: Joi.string()
+            .required()
+            .messages({
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
+            }),
         symbol: Joi.string().required().messages({
             'string.base': 'symbol must be a string.',
             'string.empty': 'symbol cannot be empty.',
@@ -367,12 +370,12 @@ export const validateModifyOrder = (req, res, next) => {
             take_profit: req.body.take_profit,
             tp_trigger_by: req.body.tp_trigger_by,
             stop_loss: req.body.stop_loss,
-            sl_trigger_by: req.body.sl_trigger_by
+            sl_trigger_by: req.body.sl_trigger_by,
         }
     );
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -383,11 +386,13 @@ export const validateModifyOrder = (req, res, next) => {
 
 export const validateClosePosition = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number().required().messages({
-            'number.base': 'user_id must be a number.',
-            'number.empty': 'user_id cannot be empty.',
-            'any.required': 'user_id is required.',
-        }),
+        user_id: Joi.string()
+            .required()
+            .messages({
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
+            }),
         symbol: Joi.string().required().messages({
             'string.base': 'symbol must be a string.',
             'string.empty': 'symbol cannot be empty.',
@@ -403,6 +408,25 @@ export const validateClosePosition = (req, res, next) => {
             'number.positive': 'qty must be greater than 0.',
             'any.required': 'qty is required.',
         }),
+        type: Joi.string().valid("Limit", "Market").required().messages({
+            'string.base': 'type must be a string.',
+            'any.only': 'type must be either Limit or Market.',
+            'any.required': 'type is required.',
+        }),
+        price: Joi.when('type', {
+            is: 'Limit',
+            then: Joi.number().positive().required().messages({
+                'number.base': 'price must be a number.',
+                'number.positive': 'price must be greater than 0.',
+                'any.required': 'price is required for Limit orders.',
+            }),
+            otherwise: Joi.any().optional()
+        }),
+        time_in_force: Joi.when('type', {
+            is: 'Limit',
+            then: Joi.string().valid("GTC", "PostOnly").optional(),
+            otherwise: Joi.optional()
+        })
     });
 
     const { error } = schema.validate(
@@ -410,12 +434,15 @@ export const validateClosePosition = (req, res, next) => {
             user_id: req.body.user_id,
             symbol: req.body.symbol,
             side: req.body.side,
-            qty: req.body.qty
+            qty: req.body.qty,
+            type: req.body.type,
+            price: req.body.price,
+            time_in_force: req.body.time_in_force
         }
     );
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -426,11 +453,11 @@ export const validateClosePosition = (req, res, next) => {
 
 export const validateGetOpenOrders = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string().optional().messages({
@@ -447,7 +474,7 @@ export const validateGetOpenOrders = (req, res, next) => {
             }),
         order_type: Joi.string()
             .required()
-            .valid("Order", "tpslOrder", "trailingStop")
+            .valid("order", "tpslOrder", "trailingStop")
             .messages({
                 'string.base': 'order type must be a string.',
                 'string.empty': 'order type cannot be empty.',
@@ -463,7 +490,7 @@ export const validateGetOpenOrders = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -474,11 +501,11 @@ export const validateGetOpenOrders = (req, res, next) => {
 
 export const validateGetOrderHistory = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string().optional().messages({
@@ -495,22 +522,19 @@ export const validateGetOrderHistory = (req, res, next) => {
             }),
         limit: Joi.number().required().messages({
             'number.base': 'limit must be a number.',
-            'number.empty': 'limit cannot be empty.',
             'any.required': 'limit is required.',
         }),
         startTime: Joi.number().optional().messages({
-            'string.base': 'start time must be a string.',
-            'string.empty': 'start time cannot be empty.',
+            'number.base': 'start time must be a number.',
             'any.required': 'start time is required.',
         }),
         endTime: Joi.number().optional().messages({
-            'string.base': 'end time must be a string.',
-            'string.empty': 'end time cannot be empty.',
+            'number.base': 'end time must be a number.',
             'any.required': 'end time is required.',
         }),
         order_type: Joi.string()
             .required()
-            .valid("Order", "tpslOrder")
+            .valid("Order", "StopOrder")
             .messages({
                 'string.base': 'order type must be a string.',
                 'string.empty': 'order type cannot be empty.',
@@ -529,7 +553,7 @@ export const validateGetOrderHistory = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -540,11 +564,11 @@ export const validateGetOrderHistory = (req, res, next) => {
 
 export const validateGetTradeHistoryAndClosedPnL = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string().optional().messages({
@@ -554,17 +578,14 @@ export const validateGetTradeHistoryAndClosedPnL = (req, res, next) => {
         }),
         limit: Joi.number().required().messages({
             'number.base': 'limit must be a number.',
-            'number.empty': 'limit cannot be empty.',
             'any.required': 'limit is required.',
         }),
         startTime: Joi.number().optional().messages({
-            'string.base': 'start time must be a string.',
-            'string.empty': 'start time cannot be empty.',
+            'number.base': 'start time must be a number.',
             'any.required': 'start time is required.',
         }),
         endTime: Joi.number().optional().messages({
-            'string.base': 'end time must be a string.',
-            'string.empty': 'end time cannot be empty.',
+            'number.base': 'end time must be a number.',
             'any.required': 'end time is required.',
         }),
     })
@@ -578,7 +599,7 @@ export const validateGetTradeHistoryAndClosedPnL = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -589,11 +610,11 @@ export const validateGetTradeHistoryAndClosedPnL = (req, res, next) => {
 
 export const validateAddIsolatedMargin = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string().required().messages({
@@ -601,11 +622,14 @@ export const validateAddIsolatedMargin = (req, res, next) => {
             'string.empty': 'symbol cannot be empty.',
             'any.required': 'symbol is required.',
         }),
-        margin: Joi.number().required().messages({
-            'number.base': 'margin must be a number.',
-            'number.empty': 'margin cannot be empty.',
-            'any.required': 'margin is required.',
-        })
+        margin: Joi.number()
+            .precision(4)
+            .required()
+            .messages({
+                'number.base': 'margin must be a number.',
+                'any.required': 'margin is required.',
+            }),
+
     });
 
     const { error } = schema.validate({
@@ -615,7 +639,7 @@ export const validateAddIsolatedMargin = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -626,11 +650,11 @@ export const validateAddIsolatedMargin = (req, res, next) => {
 
 export const validateAutoIsolatedMargin = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
         symbol: Joi.string().required().messages({
@@ -640,7 +664,6 @@ export const validateAutoIsolatedMargin = (req, res, next) => {
         }),
         auto_margin: Joi.number().valid(0, 1).required().messages({
             'number.base': 'auto_margin must be a number.',
-            'number.empty': 'auto_margin cannot be empty.',
             'any.required': 'auto_margin is required.',
             'any.only': 'auto_margin must be either 0 or 1.',
         }),
@@ -653,7 +676,7 @@ export const validateAutoIsolatedMargin = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -664,16 +687,18 @@ export const validateAutoIsolatedMargin = (req, res, next) => {
 
 export const validateSetTradingStop = (req, res, next) => {
     const schema = Joi.object({
-        user_id: Joi.number().required().messages({
-            'number.base': 'user_id must be a number.',
-            'number.empty': 'user_id cannot be empty.',
-            'any.required': 'user_id is required.',
-        }),
+        user_id: Joi.string()
+            .required()
+            .messages({
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
+            }),
         symbol: Joi.string().required().messages({
             'string.base': 'symbol must be a string.',
             'string.empty': 'symbol cannot be empty.',
             'any.required': 'symbol is required.',
-        }), 
+        }),
         tp_sl_mode: Joi.string().valid('Full', 'Partial'),
         take_profit: Joi.alternatives().try(
             Joi.number().positive(),
@@ -721,7 +746,7 @@ export const validateSetTradingStop = (req, res, next) => {
     );
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });

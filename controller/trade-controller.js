@@ -1,5 +1,15 @@
 import { subClient } from "../utils/utils.js";
 import pool from "../connection/dbConnection.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+    path: path.resolve(__dirname, "../.env")
+});
 
 export const setLeverage = async (req, resp) => {
     const { user_id, symbol, leverage } = req.body;
@@ -8,12 +18,12 @@ export const setLeverage = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
-        await client.setLeverage({
+        const response = await client.setLeverage({
             category: 'linear',
             symbol: symbol,
             buyLeverage: leverage, // In cross buy and sell leverage same in isolated can be different 
@@ -22,14 +32,14 @@ export const setLeverage = async (req, resp) => {
 
         if (response.retCode === 0) {
             return resp.status(200).json({
-                success: "1", message: response.retMsg,
+                success: "1", message: "New leverage set successfully.",
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error('Error setting leverage:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -42,7 +52,7 @@ export const getPosition = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -52,16 +62,59 @@ export const getPosition = async (req, resp) => {
             settleCoin: quote_coin
         });
 
-        if (response.retCode === 0) {
+        if (
+            response?.retCode === 0 &&
+            response?.result?.list &&
+            Array.isArray(response.result.list)
+        ) {
+
+            const transformData = await Promise.all(response.result.list.map(async (item) => {
+                let price_decimal;
+                let qty_decimal;
+                const priceDecimalsRows = await pool.query(
+                    `SELECT price_decimal, qty_decimal FROM futures_currencies WHERE symbol = ? AND status = 1`,
+                    [item.symbol.toUpperCase()]
+                );
+
+                if (priceDecimalsRows.length === 0) {
+                    price_decimal = 2;
+                    qty_decimal = 0;
+                } else {
+                    price_decimal = priceDecimalsRows[0].price_decimal;
+                    qty_decimal = priceDecimalsRows[0].qty_decimal;
+                }
+
+                return {
+                    symbol: item.symbol,
+                    price_decimal: price_decimal,
+                    qty_decimal: qty_decimal,
+                    leverage: item.leverage,
+                    side: item.side,
+                    qty: item.size,
+                    position_value: item.positionValue,
+                    entry_price: item.avgPrice,
+                    mark_price: item.markPrice,
+                    liquidation_price: item.liqPrice,
+                    initial_margin: item.positionIM,
+                    position_margin: item.positionBalance,
+                    unrealised_Pnl: item.unrealisedPnl,
+                    unrealised_Pnl_pc: (item.unrealisedPnl * 100) / (item.positionValue / item.leverage),
+                    take_profit: item.takeProfit,
+                    stop_loss: item.stopLoss,
+                    trailing_stop: item.trailingStop,
+                    activation_price: String(item.avgPrice - item.trailingStop),
+                    auto_margin: item.autoAddMargin
+                };
+            }));
             return resp.status(200).json({
-                success: "1", data: response.result.list,
+                success: "1", data: transformData,
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response?.retMsg || "No positions found" });
         }
     } catch (error) {
         console.error('Error fetching positions:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -71,10 +124,10 @@ export const getPosition = async (req, resp) => {
 export const getLeverage = async (req, resp) => {
     const { user_id, symbol } = req.body;
     try {
-        const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
+        const rows = await pool.query(`Select api_key, api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -86,14 +139,14 @@ export const getLeverage = async (req, resp) => {
 
         if (response.retCode === 0) {
             return resp.status(200).json({
-                success: "1", data: { leverage: response.result.list[0].leverage },
+                success: "1", data: { leverage: Number(response.result.list[0].leverage) },
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
-        console.error('Error in getting leverage:', error);
-        return resp.status(500).json({
+        console.error('Error in getting leverage:', error.message);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -106,7 +159,7 @@ export const switchMarginMode = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -118,11 +171,11 @@ export const switchMarginMode = async (req, resp) => {
                 success: "1", message: response.retMsg
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
-        console.error('Error switching isolated margin:', error);
-        return resp.status(500).json({
+        console.error('Error switching margin mode:', error);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -148,7 +201,7 @@ export const placeOrder = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -194,12 +247,12 @@ export const placeOrder = async (req, resp) => {
                 }
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
 
     } catch (error) {
         console.error("Error placing order:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to place order.",
         });
@@ -213,7 +266,7 @@ export const cancelOrder = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -229,11 +282,11 @@ export const cancelOrder = async (req, resp) => {
                 success: "1", message: response.result,
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error canceling order:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to cancel order.",
         });
@@ -247,27 +300,38 @@ export const cancelAllOrders = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
-        const response = await client.cancelAllOrders({
+        const payload = {
             category: 'linear',
             settleCoin: quote_coin,
-            orderFilter: order_type
-        });
+            //orderFilter: order_type
+        };
+
+        if(order_type.toUpperCase() === "LIMIT") {
+            payload.orderFilter = "Order";
+        } else if(order_type.toUpperCase() === "TPSLORDER") {
+            payload.orderFilter = "StopOrder";
+           // payload.stopOrderType = "Stop";
+        } else if(order_type.toUpperCase() === "TRAILINGSTOP") {
+            payload.orderFilter = "StopOrder";
+        }
+
+        const response = await client.cancelAllOrders(payload);
 
         if (response.retCode === 0) {
             return resp.status(200).json({
                 success: "1", message: response.result,
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error canceling All order:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to cancel order.",
         });
@@ -281,7 +345,7 @@ export const modifyOrder = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -325,11 +389,11 @@ export const modifyOrder = async (req, resp) => {
                 success: "1", data: response.result
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error modifying order:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to modify order.",
         });
@@ -337,38 +401,46 @@ export const modifyOrder = async (req, resp) => {
 };
 
 export const closePosition = async (req, resp) => {
-    const { user_id, symbol, qty, side } = req.body;
+    const { user_id, symbol, qty, side, type, price, time_in_force } = req.body;
 
     try {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
-        const response = await client.submitOrder({
+        const closePosPayload = {
             category: 'linear',
             symbol,
             side: side,  // opposite side of current position
-            orderType: 'Market',
+            orderType: type,
             qty: qty.toString(),
             reduceOnly: true,
-        });
+        };
 
-        console.log('Position closed:', JSON.stringify(response, null, 2));
+        if (type === "Limit") {
+            closePosPayload.price = price.toString();
+        }
+
+        if (time_in_force !== undefined) {
+            closePosPayload.timeInForce = time_in_force;
+        }
+
+        const response = await client.submitOrder(closePosPayload);
 
         if (response.retCode === 0) {
             return resp.status(200).json({
                 success: "1", data: response.result
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error closing position:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to close position.",
         });
@@ -440,17 +512,54 @@ export const getOpenOrders = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
+        // limit: 1,
+
+        let leverageMap = new Map();
+
+        async function getLeverageForSymbol(symbol) {
+            if (leverageMap.has(symbol)) {
+                return leverageMap.get(symbol);
+            }
+
+            const leveragePromise = (async () => {
+                try {
+                    const response = await client.getPositionInfo({
+                        category: 'linear',
+                        symbol
+                    });
+
+                    if (response.retCode === 0 && response.result.list.length > 0) {
+                        const lev = Number(response.result.list[0].leverage);
+                        leverageMap.set(symbol, lev);
+                        return lev;
+                    }
+                } catch (err) {
+                    console.error(`Error fetching leverage for ${symbol}:`, err);
+                }
+
+                leverageMap.delete(symbol);
+                return null;
+            })();
+
+            leverageMap.set(symbol, leveragePromise);
+            return leveragePromise;
+        }
+
+
         const orderPayload = {
             category: 'linear',
+            //orderFilter: 'StopOrder',
         };
 
         if (order_type.toUpperCase() === "ORDER") {
             orderPayload.orderFilter = order_type;
+        } else {
+            orderPayload.orderFilter = "StopOrder";
         }
 
         if (symbol) {
@@ -465,76 +574,262 @@ export const getOpenOrders = async (req, resp) => {
 
         let transformedOrders = [];
 
+        const decimalRows = await pool.query(
+            `SELECT symbol, price_decimal, qty_decimal FROM futures_currencies WHERE status = 1`
+        );
+
+        const decimalsMap = new Map(
+            decimalRows.map(r => [r.symbol.toUpperCase(), {
+                price_decimal: r.price_decimal,
+                qty_decimal: r.qty_decimal
+            }])
+        );
+
+        const defaultDecimals = { price_decimal: 2, qty_decimal: 0 };
+
+        // if (order_type.toUpperCase() === "ORDER") {
+        //     transformedOrders = response?.result?.list?.map(order => {
+        //         const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+        //         const leverage =  getLeverageForSymbol(order.symbol);
+        //         return {
+        //             order_id: order.orderId,
+        //             symbol: order.symbol,
+        //             order_type: order.orderType,
+        //             client_order_id: order.orderLinkId,
+        //             side: order.side,
+        //             order_price: order.price,
+        //             qty: order.qty,
+        //             filled_qty: order.cumExecQty,
+        //             stop_order_type: order.stopOrderType,
+        //             order_value: order.leavesValue,
+        //             order_status: order.orderStatus,
+        //             tpsl_mode: order.tpslMode,
+        //             take_profit: order.takeProfit,
+        //             stop_loss: order.stopLoss,
+        //             time: order.createdTime,
+        //             reduce_only: order.reduceOnly,
+        //             trade_type: getTradeType(order),
+        //             price_decimal: decimals.price_decimal,
+        //             qty_decimal: decimals.qty_decimal
+        //         };
+        //     });
+
+
+        // } else if (order_type.toUpperCase() === "TPSLORDER") {
+        //     transformedOrders = response?.result?.list
+        //         .filter(order =>
+        //             order.orderType === "Market" &&
+        //             (order.stopOrderType === "StopLoss" || order.stopOrderType === "TakeProfit" || order.stopOrderType === "PartialTakeProfit" || order.stopOrderType === "PartialStopLoss")
+        //         )
+        //         .map(order => {
+        //             const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+        //             return {
+        //                 order_id: order.orderId,
+        //                 symbol: order.symbol,
+        //                 order_type: order.orderType,
+        //                 client_order_id: order.orderLinkId,
+        //                 side: order.side,
+        //                 order_price: order.triggerPrice,
+        //                 qty: order.qty,
+        //                 filled_qty: order.cumExecQty,
+        //                 stopOrderType: order.stopOrderType,
+        //                 order_value: order.leavesValue,
+        //                 order_status: order.orderStatus,
+        //                 tpsl_mode: order.tpslMode,
+        //                 take_profit: order.takeProfit,
+        //                 stop_loss: order.stopLoss,
+        //                 time: order.createdTime,
+        //                 reduce_only: order.reduceOnly,
+        //                 trade_type: getTradeType(order),
+        //                 price_decimal: decimals.price_decimal,
+        //                 qty_decimal: decimals.qty_decimal
+        //             }
+        //         });
+        // } else if (order_type.toUpperCase() === "TRAILINGSTOP") {
+        //     transformedOrders = response?.result?.list
+        //         .filter(order =>
+        //             order.orderType === "Market" &&
+        //             order.stopOrderType === "TrailingStop"
+        //         )
+        //         .map(order => {
+        //             const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+        //             return {
+        //                 order_id: order.orderId,
+        //                 symbol: order.symbol,
+        //                 order_type: order.orderType,
+        //                 client_order_id: order.orderLinkId,
+        //                 side: order.side,
+        //                 order_price: order.triggerPrice,
+        //                 qty: order.qty,
+        //                 filled_qty: order.cumExecQty,
+        //                 stopOrderType: order.stopOrderType,
+        //                 order_value: order.leavesValue,
+        //                 order_status: order.orderStatus,
+        //                 tpsl_mode: order.tpslMode,
+        //                 take_profit: order.takeProfit,
+        //                 stop_loss: order.stopLoss,
+        //                 time: order.createdTime,
+        //                 reduce_only: order.reduceOnly,
+        //                 trade_type: getTpSlTradeType(order),
+        //                 price_decimal: decimals.price_decimal,
+        //                 qty_decimal: decimals.qty_decimal
+        //             }
+        //         })
+        // }
+
+
+        // transformedOrders = await Promise.all(
+        //     response?.result?.list
+        //         .filter(order =>
+        //             order.orderType === "Market" &&
+        //             (order.stopOrderType === "StopLoss" ||
+        //                 order.stopOrderType === "TakeProfit" ||
+        //                 order.stopOrderType === "PartialTakeProfit" ||
+        //                 order.stopOrderType === "PartialStopLoss")
+        //         )
+        //         .map(async (order) => {
+        //             const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+        //             const leverage = await getLeverageForSymbol(order.symbol);
+
+        //             return {
+        //                 order_id: order.orderId,
+        //                 symbol: order.symbol,
+        //                 order_type: order.orderType,
+        //                 client_order_id: order.orderLinkId,
+        //                 side: order.side,
+        //                 order_price: order.triggerPrice,
+        //                 qty: order.qty,
+        //                 filled_qty: order.cumExecQty,
+        //                 stopOrderType: order.stopOrderType,
+        //                 order_value: order.leavesValue,
+        //                 order_status: order.orderStatus,
+        //                 tpsl_mode: order.tpslMode,
+        //                 take_profit: order.takeProfit,
+        //                 stop_loss: order.stopLoss,
+        //                 time: order.createdTime,
+        //                 reduce_only: order.reduceOnly,
+        //                 trade_type: getTpSlTradeType(order),
+        //                 price_decimal: decimals.price_decimal,
+        //                 qty_decimal: decimals.qty_decimal,
+        //                 leverage: leverage
+        //             }
+        //         })
+        // );
+
         if (order_type.toUpperCase() === "ORDER") {
-            transformedOrders = response?.result?.list?.map(order => ({
-                order_id: order.orderId,
-                symbol: order.symbol,
-                order_type: order.orderType,
-                client_order_id: order.orderLinkId,
-                side: order.side,
-                order_price: order.price,
-                qty: order.qty,
-                filled_qty: order.cumExecQty,
-                stop_order_type: order.stopOrderType,
-                order_value: order.leavesValue,
-                order_status: order.orderStatus,
-                tpsl_mode: order.tpslMode,
-                take_profit: order.takeProfit,
-                stop_loss: order.stopLoss,
-                time: order.createdTime,
-                reduce_only: order.reduceOnly,
-                trade_type: getTradeType(order)
-            }));
-        } else if(order_type.toUpperCase() === "tpslOrder") {
-            transformedOrders = response?.result?.list
-                .filter(order =>
-                    order.orderType === "Market" &&
-                    (order.stopOrderType === "StopLoss" || order.stopOrderType === "TakeProfit" || order.stopOrderType === "PartialTakeProfit" || order.stopOrderType === "PartialStopLoss")
+            transformedOrders = await Promise.all(
+                response?.result?.list?.map(async (order) => {
+                    const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+                    const leverage = await getLeverageForSymbol(order.symbol);
+
+                    return {
+                        order_id: order.orderId,
+                        symbol: order.symbol,
+                        order_type: order.orderType,
+                        client_order_id: order.orderLinkId,
+                        side: order.side,
+                        order_price: order.price,
+                        qty: order.qty,
+                        filled_qty: order.cumExecQty,
+                        stop_order_type: order.stopOrderType,
+                        order_value: order.leavesValue,
+                        order_status: order.orderStatus,
+                        tpsl_mode: order.tpslMode,
+                        take_profit: order.takeProfit,
+                        stop_loss: order.stopLoss,
+                        time: order.createdTime,
+                        reduce_only: order.reduceOnly,
+                        trade_type: getTradeType(order),
+                        price_decimal: decimals.price_decimal,
+                        qty_decimal: decimals.qty_decimal,
+                        leverage: leverage
+                    };
+                })
+            );
+        } else if (order_type.toUpperCase() === "TPSLORDER") {
+            const filteredOrders = response?.result?.list.filter(order =>
+                order.orderType === "Market" &&
+                (
+                    order.stopOrderType === "StopLoss" ||
+                    order.stopOrderType === "TakeProfit" ||
+                    order.stopOrderType === "PartialTakeProfit" ||
+                    order.stopOrderType === "PartialStopLoss"
                 )
-                .map(order => ({
-                    order_id: order.orderId,
-                    symbol: order.symbol,
-                    order_type: order.orderType,
-                    client_order_id: order.orderLinkId,
-                    side: order.side,
-                    order_price: order.triggerPrice,
-                    qty: order.qty,
-                    filled_qty: order.cumExecQty,
-                    stopOrderType: order.stopOrderType,
-                    order_value: order.leavesValue,
-                    order_status: order.orderStatus,
-                    tpsl_mode: order.tpslMode,
-                    take_profit: order.takeProfit,
-                    stop_loss: order.stopLoss,
-                    time: order.createdTime,
-                    reduce_only: order.reduceOnly,
-                    trade_type: getTradeType(order)
-                }));
-        } else if(order_type.toUpperCase() === "trailingStopOrder") {
-            transformedOrders = response?.result?.list
-                .filter(order =>
-                    order.orderType === "Market" &&
-                    order.stopOrderType === "TrailingStop"
-                )
-                .map(order => ({
-                    order_id: order.orderId,
-                    symbol: order.symbol,
-                    order_type: order.orderType,
-                    client_order_id: order.orderLinkId,
-                    side: order.side,
-                    order_price: order.triggerPrice,
-                    qty: order.qty,
-                    filled_qty: order.cumExecQty,
-                    stopOrderType: order.stopOrderType,
-                    order_value: order.leavesValue,
-                    order_status: order.orderStatus,
-                    tpsl_mode: order.tpslMode,
-                    take_profit: order.takeProfit,
-                    stop_loss: order.stopLoss,
-                    time: order.createdTime,
-                    reduce_only: order.reduceOnly,
-                    trade_type: getTpSlTradeType(order)
-                }))
+            );
+
+            const grouped = {};
+            for (const order of filteredOrders) {
+                const key = `${order.symbol}_${order.side}_${order.qty}_${order.tpslMode}_${order.createdTime}`;
+                if (!grouped[key]) {
+                    grouped[key] = { tp: null, sl: null };
+                }
+                if (order.stopOrderType.includes("TakeProfit")) {
+                    grouped[key].tp = order;
+                } else if (order.stopOrderType.includes("StopLoss")) {
+                    grouped[key].sl = order;
+                }
+            }
+            transformedOrders = await Promise.all(
+                Object.values(grouped).map(async (group) => {
+                    const baseOrder = group.tp || group.sl; // use whichever exists
+                    const decimals = decimalsMap.get(baseOrder.symbol.toUpperCase()) || defaultDecimals;
+                    // const leverage = await getLeverageForSymbol(baseOrder.symbol);
+
+                    return {
+                        order_id: group.tp?.orderId || group.sl?.orderId,
+                        symbol: baseOrder.symbol,
+                        order_type: baseOrder.orderType,
+                        client_order_id: baseOrder.orderLinkId,
+                        side: baseOrder.side,
+                        qty: baseOrder.qty,
+                        tpsl_mode: baseOrder.tpslMode,
+                        //leverage: leverage,
+                        price_decimal: decimals.price_decimal,
+                        qty_decimal: decimals.qty_decimal,
+                        trade_type: getTpSlTradeType(group.tp || group.sl),
+                        take_profit: {
+                            order_id: group.tp?.orderId || "",
+                            trigger_price: group.tp?.triggerPrice || ""
+                        },
+                        stop_loss: {
+                            order_id: group.sl?.orderId || "",
+                            trigger_price: group.sl?.triggerPrice || ""
+                        }
+                    };
+                })
+            );
+        } else if (order_type.toUpperCase() === "TRAILINGSTOP") {
+            transformedOrders = await Promise.all(
+                response?.result?.list
+                    .filter(order =>
+                        order.orderType === "Market" &&
+                        (order.createType === "CreateByTrailingStop" || order.createType === "CreateByTrailingProfit")
+                    )
+                    .map(async (order) => {
+                        const decimals = decimalsMap.get(order.symbol.toUpperCase()) || defaultDecimals;
+                       // const leverage = await getLeverageForSymbol(order.symbol);
+
+                        return {
+                            order_id: order.orderId,
+                            symbol: order.symbol,
+                            order_type: order.orderType,
+                            client_order_id: order.orderLinkId,
+                            side: order.side,
+                            trigger_price: order.triggerPrice,
+                            qty: order.qty,
+                            filled_qty: order.cumExecQty,
+                            stopOrderType: order.stopOrderType,
+                            order_price: order.lastPriceOnCreated,
+                            //order_status: order.orderStatus,
+                            time: order.createdTime,
+                            reduce_only: order.reduceOnly,
+                            trade_type: getTpSlTradeType(order),
+                            price_decimal: decimals.price_decimal,
+                            qty_decimal: decimals.qty_decimal,
+                           // leverage: leverage
+                        }
+                    })
+            );
         }
 
         if (response.retCode === 0) {
@@ -542,11 +837,11 @@ export const getOpenOrders = async (req, resp) => {
                 success: "1", data: transformedOrders
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error getting all orders:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to get all orders.",
         });
@@ -560,19 +855,20 @@ export const getOrderHistory = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
         const orderPayload = {
             category: 'linear',
+            orderFilter: order_type,
             limit: limit
         };
 
-        if (order_type.toUpperCase() === "ORDER") {
-            orderPayload.orderFilter = order_type;
-        }
+        // if (order_type.toUpperCase() === "ORDER") {
+        //     orderPayload.orderFilter = order_type;
+        // }
 
         if (symbol) {
             orderPayload.symbol = symbol;
@@ -599,7 +895,7 @@ export const getOrderHistory = async (req, resp) => {
             start = end_time - SEVEN_DAYS;
         } else {
             if (end_time - start_time > SEVEN_DAYS) {
-                return resp.status(400).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
+                return resp.status(200).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
             }
             start = start_time;
             end = end_time;
@@ -633,12 +929,12 @@ export const getOrderHistory = async (req, resp) => {
                 trigger_price: order.triggerPrice,
                 trade_type: getTradeType(order)
             }));
-        } else {
+        } else if (order_type.toUpperCase() === "STOPORDER") {
             extracted = response?.result?.list
-                .filter(order =>
-                    order.orderType === "Market" &&
-                    (order.stopOrderType === "StopLoss" || order.stopOrderType === "TakeProfit" || order.stopOrderType === "PartialTakeProfit" || order.stopOrderType === "PartialStopLoss")
-                )
+                // .filter(order =>
+                //     order.orderType === "Market" &&
+                //     (order.stopOrderType === "StopLoss" || order.stopOrderType === "TakeProfit" || order.stopOrderType === "PartialTakeProfit" || order.stopOrderType === "PartialStopLoss" || order.stopOrderType === "TrailingStop")
+                // )
                 .map(order => ({
                     order_id: order.orderId,
                     symbol: order.symbol,
@@ -659,7 +955,34 @@ export const getOrderHistory = async (req, resp) => {
                     trigger_price: order.triggerPrice,
                     trade_type: getTpSlTradeType(order)
                 }));
-        }
+        } 
+        // else if(order_type.toUpperCase() === "TRAILINGSTOP"){
+        //     extracted = response?.result?.list
+        //         .filter(order =>
+        //             order.orderType === "Market" &&
+        //             (order.stopOrderType === "TrailingStop")
+        //         )
+        //         .map(order => ({
+        //             order_id: order.orderId,
+        //             symbol: order.symbol,
+        //             order_type: order.orderType,
+        //             client_order_id: order.orderLinkId,
+        //             avg_price: order.avgPrice,
+        //             stop_order_type: order.stopOrderType,
+        //             order_status: order.orderStatus,
+        //             filled_qty: order.cumExecQty,
+        //             qty: order.qty,
+        //             filled_value: order.cumExecValue,
+        //             order_value: order.price * order.qty,
+        //             side: order.side,
+        //             fee: order.cumExecFee,
+        //             time: order.createdTime,
+        //             reduce_only: order.reduceOnly,
+        //             order_price: order.price,
+        //             trigger_price: order.triggerPrice,
+        //             trade_type: getTpSlTradeType(order)
+        //         }));
+        // }
 
 
         if (response.retCode === 0) {
@@ -667,11 +990,11 @@ export const getOrderHistory = async (req, resp) => {
                 success: "1", data: extracted
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error getting order history:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to get order history.",
         });
@@ -685,7 +1008,7 @@ export const getTradeHistory = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -716,7 +1039,7 @@ export const getTradeHistory = async (req, resp) => {
             start = end_time - SEVEN_DAYS;
         } else {
             if (end_time - start_time > SEVEN_DAYS) {
-                return resp.status(400).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
+                return resp.status(200).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
             }
             start = start_time;
             end = end_time;
@@ -752,11 +1075,11 @@ export const getTradeHistory = async (req, resp) => {
                 success: "1", data: transformed
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error getting trade history:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to get trade history.",
         });
@@ -777,7 +1100,7 @@ export const getClosedPnL = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -808,7 +1131,7 @@ export const getClosedPnL = async (req, resp) => {
             start = end_time - SEVEN_DAYS;
         } else {
             if (end_time - start_time > SEVEN_DAYS) {
-                return resp.status(400).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
+                return resp.status(200).json({ success: "0", message: "The difference between startTime and endTime must be ≤ 7 days." });
             }
             start = start_time;
             end = end_time;
@@ -831,7 +1154,7 @@ export const getClosedPnL = async (req, resp) => {
             qty: order.qty,
             exit_price: order.avgExitPrice,
             filled_type: order.execType,
-            closing_direction: getClosingDirPnL(order.closedPnl, order.side),
+            trade_type: getClosingDirPnL(order.closedPnl, order.side),
             time: order.createdTime,
         }));
 
@@ -841,11 +1164,11 @@ export const getClosedPnL = async (req, resp) => {
                 success: "1", data: transformed
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error getting trade history:", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to get trade history.",
         });
@@ -858,7 +1181,7 @@ export const addIsolatedMargin = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -869,18 +1192,16 @@ export const addIsolatedMargin = async (req, resp) => {
             margin: margin.toString()
         });
 
-        //console.log('addIsolatedMargin', JSON.stringify(response, null, 2));
-
         if (response.retCode === 0) {
             return resp.status(200).json({
                 success: "1", message: response.retMsg
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error('Error switching isolated margin:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -893,7 +1214,7 @@ export const autoIsolatedMargin = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -904,18 +1225,16 @@ export const autoIsolatedMargin = async (req, resp) => {
             autoAddMargin: auto_margin
         });
 
-        console.log('autoIsolatedMargin', JSON.stringify(response, null, 2));
-
         if (response.retCode === 0) {
             return resp.status(200).json({
                 success: "1", message: response.retMsg
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error('Error switching isolated margin:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -929,7 +1248,7 @@ export const setTradingStop = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -954,7 +1273,7 @@ export const setTradingStop = async (req, resp) => {
             }
 
             if (tp_sl_mode === "Partial") {
-                if(qty !== undefined) {
+                if (qty !== undefined) {
                     orderPayload.tpSize = qty.toString();
                     orderPayload.slSize = qty.toString();
                 }
@@ -971,22 +1290,18 @@ export const setTradingStop = async (req, resp) => {
             }
         }
 
-        console.log('orderPayload', JSON.stringify(orderPayload, null, 2));
-
         const response = await client.setTradingStop(orderPayload);
-
-        console.log('setTradingStop', JSON.stringify(response, null, 2));
 
         if (response.retCode === 0) {
             return resp.status(200).json({
                 success: "1", data: response.result
             });
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error("Error in setTradingStop", error);
-        resp.status(500).json({
+        resp.status(200).json({
             success: "0",
             message: "Failed to set trading stop.",
         });

@@ -1,51 +1,40 @@
 import pool from "../connection/dbConnection.js";
-import { client } from "../utils/utils.js";
+import CryptoJS from "crypto-js";
+//import { client } from "../utils/utils.js";
 import { subClient } from "../utils/utils.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+  path: path.resolve(__dirname, "../.env")
+});
 
 // * The API key must have one of the permissions to be allowed to call the following API endpoint.
 // * For master API key: "Account Transfer", "Subaccount Transfer", "Withdrawal"
 
-// export const createSubAccount = async (req, resp) => {
-//     const { username } = req.body;
-//     try {
-//         const response = await client.createSubMember({
-//             username: username, // required
-//             memberType: 1,     // 1 - normal sub acc
-//             switch: 1,        // 1 - turn on quick login, 0 - turn off quick login (default)
-//         });
-
-//         console.log('Sub-account created:', JSON.stringify(response, null, 2));
-
-
-
-//         // Store the sub-UID in the database
-//         const query = `INSERT INTO futures_sub_acc (user_name, user_id, api_key, api_secret) VALUES (?, ?, ?, ?)`;
-//         await pool.query(query, [username, response.result.uid]);
-
-//         return resp.status(200).json({
-//             success: "1",
-//             message: "Sub-account created successfully.",
-//             data: response,
-//         });
-//     } catch (error) {
-//         console.error('Error creating sub-account:', error?.response || error);
-//         return resp.status(500).json({
-//             success: "0",
-//             message: "An unexpected error occurred.",
-//             error: error.message,
-//         });
-//     }
-// };
-
 export const createSubAccount = async (req, resp) => {
-    const { username } = req.body;
+    const { user_id } = req.body;
 
     try {
+        const rows = await pool.query(`Select user_id from futures_sub_acc where user_id = ?`, [user_id]);
+
+        if (rows.length > 0) {
+            return resp.status(200).json({ success: "1", message: "Account already exists" });
+        }
+
         const response = await client.createSubMember({
-            username: username,
+            username: user_id,
             memberType: 1,
             switch: 1,
         });
+
+        if (response.retCode !== 0) {
+            return resp.status(200).json({ success: "0", message: response.retMsg });
+        }
 
         const uid = response.result.uid;
 
@@ -75,29 +64,29 @@ export const createSubAccount = async (req, resp) => {
                 console.error(`Failed to delete sub-account ${uid}:`, deleteErr?.response?.data || deleteErr.message);
             }
 
-            return resp.status(500).json({
+            return resp.status(200).json({
                 success: "0",
                 message: "An unexpected error occurred. Please try again.",
             });
         }
 
+        const encryptedSecret = CryptoJS.AES.encrypt(apiSecret, process.env.ENCRYPTION_KEY).toString();
+        const encryptedKey = CryptoJS.AES.encrypt(apiKey, process.env.ENCRYPTION_KEY).toString();
+
         const query = `
-        INSERT INTO futures_sub_acc (user_name, user_id, api_key, api_secret)
-        VALUES (?, ?, ?, ?)
-      `;
-        await pool.query(query, [username, uid, apiKey, apiSecret]);
+            INSERT INTO futures_sub_acc (user_id, account_id, api_key, api_secret)
+            VALUES (?, ?, ?, ?)
+          `;
+        await pool.query(query, [user_id, uid, encryptedKey, encryptedSecret]);
 
         return resp.status(200).json({
             success: "1",
-            message: "Sub-account created successfully.",
-            data: {
-                user_id: uid,
-            }
+            message: "Account created successfully.",
         });
 
     } catch (error) {
-        console.error('Unexpected Error:', error?.response?.data || error.message || error);
-        return resp.status(500).json({
+        console.error('Error creating sub-account:', error);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -109,7 +98,7 @@ export const getAllSubAccount = async (req, resp) => {
         const response = await client.getSubUIDList();
 
         if (response.retCode !== 0) {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
 
         return resp.status(200).json({
@@ -118,34 +107,39 @@ export const getAllSubAccount = async (req, resp) => {
         });
     } catch (error) {
         console.error('Error fetching all sub-accounts:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
     }
 };
 
-export const getAccountInfo = async (req, resp) => {
+export const getMarginMode = async (req, resp) => {
     try {
         const { user_id } = req.body;
 
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
-        
+
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
-        
+
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
 
         const response = await client.getAccountInfo();
+
+        if (response.retCode !== 0) {
+            return resp.status(200).json({ success: "0", message: response.retMsg });
+        }
+
         return resp.status(200).json({
             success: "1",
-            message: "account information fetched successfully.",
-            data: response,
+            message: "Margin mode fetched successfully.",
+            data: response.result.marginMode,
         });
     } catch (error) {
-        console.error('Error fetching sub-account information:', error?.response || error);
-        return resp.status(500).json({
+        console.error('Error fetching margin mode:', error);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
             error: error.message,

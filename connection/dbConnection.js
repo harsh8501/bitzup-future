@@ -10,8 +10,6 @@ const user = process.env.DB_USER;
 const password = process.env.DB_PASSWORD;
 const databaseName = process.env.DB_NAME;
 
-console.log(host, user, password, databaseName);
-
 // Create a connection pool
 const pool = mysql.createPool({
   connectionLimit: 10,  // Number of connections to allow in the pool

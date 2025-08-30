@@ -2,9 +2,16 @@ import { client } from "../utils/utils.js";
 import pool from "../connection/dbConnection.js";
 import { v4 as uuidv4 } from 'uuid';
 import { subClient } from "../utils/utils.js";
+import path from "path";
+import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+  path: path.resolve(__dirname, "../.env")
+});
 
 export const getBalance = async (req, resp) => {
     const { coin, user_id } = req.body;
@@ -15,7 +22,7 @@ export const getBalance = async (req, resp) => {
         const rows = await pool.query(`Select api_key,api_secret from futures_sub_acc where user_id = ? AND status = 1`, [user_id]);
 
         if (rows.length === 0) {
-            return resp.status(400).json({ success: "0", message: "Account freezed" });
+            return resp.status(200).json({ success: "0", message: "Account freezed or not found" });
         }
 
         const client = await subClient(rows[0].api_key, rows[0].api_secret);
@@ -32,7 +39,8 @@ export const getBalance = async (req, resp) => {
                 totalUsdBalance: walletData?.totalEquity,
                 coins: walletData.coin.map(c => ({
                     coin: c.coin,
-                    walletBalance: c.walletBalance,
+                    walletBalance: Number(c.walletBalance),
+                    availableBalance: c.walletBalance - c.totalPositionIM - c.totalOrderIM
                 })),
                 totalMarginBalance: walletData?.totalMarginBalance,
                 totalAvailableBalance: walletData?.totalAvailableBalance,
@@ -44,11 +52,11 @@ export const getBalance = async (req, resp) => {
                 data: summary,
             })
         } else {
-            return resp.status(400).json({ success: "0", message: response.retMsg });
+            return resp.status(200).json({ success: "0", message: response.retMsg });
         }
     } catch (error) {
         console.error('Error fetching wallet balance:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -72,7 +80,7 @@ export const depositToSubAcc = async (req, res) => {
         });
 
         if (response.retCode !== 0) {
-            return res.status(400).json({ success: "0", message: response.retMsg });
+            return res.status(200).json({ success: "0", message: response.retMsg });
         }
 
         const status = response.result.status
@@ -94,7 +102,7 @@ export const depositToSubAcc = async (req, res) => {
         });
     } catch (error) {
         console.error('Error depositing to sub-account:', error);
-        return res.status(500).json({
+        return res.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -118,7 +126,7 @@ export const withdrawFromSubAcc = async (req, res) => {
         });
 
         if (response.retCode !== 0) {
-            return res.status(400).json({ success: "0", message: response.retMsg });
+            return res.status(200).json({ success: "0", message: response.retMsg });
         }
 
         const status = response.result.status
@@ -140,7 +148,7 @@ export const withdrawFromSubAcc = async (req, res) => {
         });
     } catch (error) {
         console.error('Error depositing to sub-account:', error);
-        return res.status(500).json({
+        return res.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });

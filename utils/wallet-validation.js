@@ -9,11 +9,11 @@ export const validateGetBalance = (req, res, next) => {
                 'string.empty': 'coin cannot be empty.',
                 'any.required': 'coin is required.',
             }),
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user_id must be a number.',
-                'number.empty': 'user_id cannot be empty.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
                 'any.required': 'user_id is required.',
             }),
     });
@@ -24,7 +24,7 @@ export const validateGetBalance = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });
@@ -47,15 +47,14 @@ export const validateDepositToSubAcc = (req, res, next) => {
             .positive()
             .messages({
                 'number.base': 'amount must be a number.',
-                'number.empty': 'amount cannot be empty.',
                 'any.required': 'amount is required.',
             }),
-        user_id: Joi.number()
+        user_id: Joi.string()
             .required()
             .messages({
-                'number.base': 'user id must be a number.',
-                'number.empty': 'user id cannot be empty.',
-                'any.required': 'user id is required.',
+                'string.base': 'user_id must be a string.',
+                'string.empty': 'user_id cannot be empty.',
+                'any.required': 'user_id is required.',
             }),
     });
 
@@ -66,7 +65,7 @@ export const validateDepositToSubAcc = (req, res, next) => {
     });
 
     if (error) {
-        return res.status(400).json({
+        return res.status(200).json({
             success: "0",
             message: error.details[0].message,
         });

@@ -1,5 +1,15 @@
 import { client } from "../utils/utils.js";
 import pool from "../connection/dbConnection.js";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({
+  path: path.resolve(__dirname, "../.env")
+});
 
 // const storeFuturesCurrencies = async () => {
 //     try {
@@ -68,9 +78,28 @@ import pool from "../connection/dbConnection.js";
 
 // }
 
-export const getFuturesCurrencies = async (req, resp) => {
+export const getCurrData = async (req, resp) => {
+    const { symbol } = req.query;
     try {
-        const query = "SELECT symbol,icon,last_price,volume_24h,change_24h,max_leverage,price_decimal,qty_decimal FROM futures_currencies where status = 1";
+        const query = "SELECT symbol,last_price FROM futures_currencies where symbol = ? and status = 1";
+        const rows = await pool.query(query, [symbol.toUpperCase()]);
+
+        return resp.status(200).json({
+            success: "1",
+            data: rows[0],
+        });
+    } catch (error) {
+        console.error('Error fetching futures currencies:', error);
+        return resp.status(200).json({
+            success: "0",
+            message: "An unexpected error occurred.",
+        });
+    }
+}
+
+export const getFuturesCurrencies = async (_req, resp) => {
+    try {
+        const query = "SELECT symbol, base_coin, icon,last_price,volume_24h,change_24h,max_leverage,price_decimal,qty_decimal,qty_step FROM futures_currencies where status = 1";
         const rows = await pool.query(query);
 
         return resp.status(200).json({
@@ -79,7 +108,26 @@ export const getFuturesCurrencies = async (req, resp) => {
         });
     } catch (error) {
         console.error('Error fetching futures currencies:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
+            success: "0",
+            message: "An unexpected error occurred.",
+        });
+    }
+}
+
+export const marketSettings = async (req, resp) => {
+    const { symbol } = req.query;
+    try {
+        const query = "SELECT max_leverage,price_decimal,qty_decimal,qty_step FROM futures_currencies where symbol = ? and status = 1";
+        const rows = await pool.query(query, [symbol.toUpperCase()]);
+
+        return resp.status(200).json({
+            success: "1",
+            data: rows[0],
+        });
+    } catch (error) {
+        console.error('Error fetching market settings:', error);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -104,7 +152,7 @@ export const getOrderBook = async (req, resp) => {
         });
     } catch (error) {
         console.error('Error fetching Order Book:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -138,7 +186,7 @@ export const getTickers = async (req, resp) => {
         });
     } catch (error) {
         console.error('Error fetching Ticker:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
@@ -167,7 +215,74 @@ export const getTrades = async (req, resp) => {
         });
     } catch (error) {
         console.error('Error fetching Ticker:', error);
-        return resp.status(500).json({
+        return resp.status(200).json({
+            success: "0",
+            message: "An unexpected error occurred.",
+        });
+    }
+}
+
+function findMMR(riskTiers, positionSizeUSD) {
+    for (const tier of riskTiers) {
+        if (positionSizeUSD <= parseFloat(tier.riskLimitValue)) {
+            return parseFloat(tier.maintenanceMargin);
+        }
+    }
+    // Return highest tier's MMR if no match
+    return parseFloat(riskTiers[riskTiers.length - 1].maintenanceMargin);
+}
+
+export const estimateLiquidationPrice = async (req, resp) => {
+    const { symbol, side, price, qty, leverage } = req.body;
+    try {
+        const response = await client.getRiskLimit({
+            category: 'linear',
+            symbol: symbol.toUpperCase(),
+        });
+
+        const positionValueUSD = price * qty;
+        const MMR = findMMR(response.result.list, positionValueUSD);
+
+        const oneOverLeverage = 1 / leverage;
+
+        let liquidationPrice;
+
+        if(side.toUpperCase() === "BUY") {
+            liquidationPrice = price * (1 - oneOverLeverage + MMR);
+        } else {
+            liquidationPrice = price * (1 + oneOverLeverage - MMR);
+        }
+
+        return resp.status(200).json({
+            success: "1",
+            data: {
+                liquidation_price: liquidationPrice
+            },
+        });
+    } catch (error) {
+        console.error('Error getting liquidation price:', error);
+        return resp.status(200).json({
+            success: "0",
+            message: "An unexpected error occurred.",
+        });
+    }
+}
+
+export const getFeeRate = async (req, resp) => {
+    const { symbol } = req.query;
+    try {
+        const response = await client.getFeeRate({
+            category: 'linear',
+            symbol: symbol.toUpperCase(),
+        });
+
+        return resp.status(200).json({
+            success: "1",
+            data: response,
+        });
+    } catch (error) {
+        console.error('Error fetching Order Book:', error);
+        return resp.status(200).json({
             success: "0",
             message: "An unexpected error occurred.",
         });
